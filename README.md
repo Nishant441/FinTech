@@ -1,4 +1,5 @@
 # FinSight Engine
+![FinSight](https://github.com/user-attachments/assets/ae3cce80-f191-4fde-bb1a-118cd6316ba2)
 
 FinSight Engine is a financial analytics dashboard that visualizes spending data, calculates growth trends, and forecasts future expenses. It consists of a FastAPI backend and a React frontend.
 
