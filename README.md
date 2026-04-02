@@ -51,6 +51,7 @@
    ```
 2. **Run Server**:
    ```bash
+   cd backend
    uvicorn main:app --reload
    ```
 
