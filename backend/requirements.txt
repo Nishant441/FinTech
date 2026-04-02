@@ -6,3 +6,6 @@ sqlalchemy
 python-multipart
 pytest
 httpx
+thefuzz
+python-Levenshtein
+alembic

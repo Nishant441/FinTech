@@ -93,3 +93,7 @@ dist-ssr
 *.db
 *.sqlite3
 finsight.db
+
+# Data
+*.csv
+sample_data.csv

@@ -36,14 +36,26 @@ const forecastNextMonth = (monthlyTrend) => {
 
 const Dashboard = () => {
     const [data, setData] = useState(null);
+    const [recurring, setRecurring] = useState([]);
+    const [uploadedFiles, setUploadedFiles] = useState([]);
     const [loading, setLoading] = useState(false);
     const fileInputRef = useRef(null);
 
     const fetchData = async () => {
         try {
-            const response = await fetch('http://localhost:8000/dashboard-data');
-            const result = await response.json();
-            setData(result);
+            const [dashRes, recRes, filesRes] = await Promise.all([
+                fetch('http://localhost:8000/dashboard-data'),
+                fetch('http://localhost:8000/analytics/recurring'),
+                fetch('http://localhost:8000/uploaded-files')
+            ]);
+            
+            const dashResult = await dashRes.json();
+            const recResult = await recRes.json();
+            const filesResult = await filesRes.json();
+            
+            setData(dashResult);
+            setRecurring(recResult);
+            setUploadedFiles(filesResult);
         } catch (error) {
             console.error("Error fetching data:", error);
         }
@@ -97,6 +109,20 @@ const Dashboard = () => {
         } catch (error) {
             console.error("Error simulating data:", error);
             alert("Simulate failed.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDeleteFile = async (fileId) => {
+        if (!window.confirm("Delete this file and all its transactions?")) return;
+        setLoading(true);
+        try {
+            await fetch(`http://localhost:8000/uploaded-files/${fileId}`, { method: 'DELETE' });
+            await fetchData();
+        } catch (error) {
+            console.error("Error deleting file:", error);
+            alert("Delete failed.");
         } finally {
             setLoading(false);
         }
@@ -191,12 +217,21 @@ const Dashboard = () => {
                             <TrendingUp size={80} />
                         </div>
                         <h3 className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-2">MoM Growth</h3>
-                        <p
-                            className={`text-3xl font-bold flex items-center gap-2 ${Number(data.growth_rate ?? 0) > 0 ? 'text-rose-500' : 'text-emerald-500'}`}
-                        >
-                            {Number(data.growth_rate ?? 0) > 0 ? '+' : ''}{Number(data.growth_rate ?? 0).toFixed(1)}%
-                        </p>
-                        <p className="text-slate-500 text-xs mt-2 font-medium">vs Previous Month</p>
+                        {data.months_count >= 2 ? (
+                            <>
+                                <p
+                                    className={`text-3xl font-bold flex items-center gap-2 ${Number(data.growth_rate ?? 0) > 0 ? 'text-rose-500' : 'text-emerald-500'}`}
+                                >
+                                    {Number(data.growth_rate ?? 0) > 0 ? '+' : ''}{Number(data.growth_rate ?? 0).toFixed(1)}%
+                                </p>
+                                <p className="text-slate-500 text-xs mt-2 font-medium">vs Previous Month</p>
+                            </>
+                        ) : (
+                            <>
+                                <p className="text-xl font-bold text-slate-400">Need 2+ Months</p>
+                                <p className="text-slate-600 text-xs mt-2 font-medium">To calculate growth</p>
+                            </>
+                        )}
                     </div>
 
                     <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-sm relative group overflow-hidden">
@@ -204,12 +239,54 @@ const Dashboard = () => {
                             <Zap size={80} />
                         </div>
                         <h3 className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-2">AI Forecast</h3>
-                        <p className="text-3xl font-bold text-white flex items-center gap-2">
-                            {fmtCurrency(aiForecast)}
-                        </p>
-                        <p className="text-slate-500 text-xs mt-2 font-medium">Predicted for Next Month</p>
+                        {aiForecast > 0 ? (
+                            <>
+                                <p className="text-3xl font-bold text-white flex items-center gap-2">
+                                    {fmtCurrency(aiForecast)}
+                                </p>
+                                <p className="text-slate-500 text-xs mt-2 font-medium">Predicted for Next Month</p>
+                            </>
+                        ) : (
+                            <>
+                                <p className="text-xl font-bold text-slate-400">Need 2+ Months</p>
+                                <p className="text-slate-600 text-xs mt-2 font-medium">To run prediction</p>
+                            </>
+                        )}
                     </div>
                 </div>
+
+                {uploadedFiles.length > 0 && (
+                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-sm">
+                        <h2 className="text-base font-semibold mb-6 text-white flex items-center gap-2">
+                            <div className="w-1 h-5 bg-indigo-500 rounded-full"></div>
+                            Uploaded Documents
+                        </h2>
+                        <div className="space-y-3">
+                            {uploadedFiles.map((file) => (
+                                <div key={file.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-950 border border-slate-800 hover:border-slate-700 transition-colors group">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-2 bg-blue-500/10 rounded-lg text-blue-500">
+                                            <FileText size={20} />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold text-white leading-tight">{file.filename}</p>
+                                            <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mt-0.5">
+                                                Uploaded {new Date(file.upload_date).toLocaleDateString()}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => handleDeleteFile(file.id)}
+                                        className="p-2 text-slate-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                        title="Delete file and transactions"
+                                    >
+                                        <Trash2 size={18} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-sm">
@@ -288,6 +365,34 @@ const Dashboard = () => {
                         </div>
                     </div>
                 </div>
+
+                {recurring.length > 0 && (
+                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-sm">
+                        <h2 className="text-base font-semibold mb-6 text-white flex items-center gap-2">
+                            <div className="w-1 h-5 bg-indigo-500 rounded-full"></div>
+                            Detected Recurring Subscriptions
+                        </h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {recurring.map((item, idx) => (
+                                <div key={idx} className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between group hover:border-indigo-500/50 transition-colors">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-3 bg-indigo-500/10 rounded-lg text-indigo-500 group-hover:bg-indigo-500 group-hover:text-white transition-all">
+                                            <Activity size={20} />
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold text-white mb-0.5">{item.description}</p>
+                                            <p className="text-xs text-slate-500 font-medium">{item.category} • {item.count} items</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-sm font-bold text-indigo-400">{fmtCurrency(item.avg_amount)}</p>
+                                        <p className="text-[10px] text-slate-600 uppercase font-bold tracking-wider">MONTHLY</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

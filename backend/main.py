@@ -127,6 +127,11 @@ async def upload_csv(file: UploadFile = File(...), db: Session = Depends(get_db)
     if missing:
         raise HTTPException(status_code=400, detail=f"Missing required columns: {sorted(list(missing))}")
 
+    # Create UploadedFile record
+    new_file = models.UploadedFile(filename=file.filename)
+    db.add(new_file)
+    db.flush() # Get the ID before committing
+
     inserted = 0
     for _, row in df.iterrows():
         tx_date = pd.to_datetime(row["date"]).date()
@@ -148,7 +153,8 @@ async def upload_csv(file: UploadFile = File(...), db: Session = Depends(get_db)
             date=tx_date,
             description=desc,
             category=cat,
-            amount=amt
+            amount=amt,
+            file_id=new_file.id
         ))
         inserted += 1
 
@@ -198,6 +204,7 @@ def get_dashboard_data(db: Session = Depends(get_db)):
 @app.post("/clear")
 def clear_all_data(db: Session = Depends(get_db)):
     db.query(models.Transaction).delete()
+    db.query(models.UploadedFile).delete()
     db.commit()
     return {"message": "All data cleared."}
 
@@ -207,7 +214,13 @@ def simulate_data(db: Session = Depends(get_db)):
     df = generate_personal_spending_df(months=6, seed=42)
 
     db.query(models.Transaction).delete()
+    db.query(models.UploadedFile).delete()
     db.commit()
+
+    # Create a dummy file record for simulated data
+    sim_file = models.UploadedFile(filename="simulated_data.csv")
+    db.add(sim_file)
+    db.flush()
 
     transactions = []
     for _, row in df.iterrows():
@@ -216,6 +229,7 @@ def simulate_data(db: Session = Depends(get_db)):
             description=str(row["description"]),
             category=str(row["category"]),
             amount=float(row["amount"]),
+            file_id=sim_file.id
         ))
 
     db.add_all(transactions)
@@ -272,3 +286,53 @@ def export_pdf(db: Session = Depends(get_db)):
     return StreamingResponse(buffer, media_type="application/pdf", headers={
         "Content-Disposition": "attachment; filename=FinSight_Report.pdf"
     })
+
+
+@app.get("/analytics/recurring")
+def get_recurring_transactions(db: Session = Depends(get_db)):
+    query = db.query(models.Transaction)
+    df = pd.read_sql(query.statement, engine)
+
+    if df.empty:
+        return []
+
+    # Detect patterns
+    recurring_patterns = analytics.find_recurring_patterns(df)
+
+    # Tag transactions in DB
+    all_recurring_ids = []
+    for pattern in recurring_patterns:
+        all_recurring_ids.extend(pattern.get("transaction_ids", []))
+
+    if all_recurring_ids:
+        # Reset all first (or just update the ones found)
+        db.query(models.Transaction).update({models.Transaction.is_recurring: 0})
+        db.query(models.Transaction).filter(models.Transaction.id.in_(all_recurring_ids)).update(
+            {models.Transaction.is_recurring: 1}, synchronize_session=False
+        )
+        db.commit()
+
+    return recurring_patterns
+
+
+@app.get("/transactions")
+def get_transactions(db: Session = Depends(get_db)):
+    transactions = db.query(models.Transaction).order_by(models.Transaction.date.desc()).all()
+    return transactions
+
+
+@app.get("/uploaded-files")
+def get_uploaded_files(db: Session = Depends(get_db)):
+    files = db.query(models.UploadedFile).order_by(models.UploadedFile.upload_date.desc()).all()
+    return files
+
+
+@app.delete("/uploaded-files/{file_id}")
+def delete_uploaded_file(file_id: int, db: Session = Depends(get_db)):
+    file_record = db.query(models.UploadedFile).filter(models.UploadedFile.id == file_id).first()
+    if not file_record:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    db.delete(file_record) # This will cascade delete linked transactions
+    db.commit()
+    return {"message": "File and associated transactions deleted."}
