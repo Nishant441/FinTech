@@ -9,7 +9,10 @@
 **FinSight Engine** is a high-performance financial analytics dashboard designed to transform raw transaction data into actionable insights. Built with a modern, decoupled architecture, it leverages **FastAPI** for a robust backend and **React + Vite** for a cinematic, responsive user experience.
 
 ---
+## Demo
+![FinSight](https://github.com/user-attachments/assets/2954ed41-eb29-4ba1-ab28-d03be01aeade)
 
+---
 ## 🚀 Key Features
 
 - **📊 Intelligent Analytics**: Real-time spending breakdown by category and month-over-month growth metrics.
