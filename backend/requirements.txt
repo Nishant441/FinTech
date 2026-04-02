@@ -9,3 +9,7 @@ httpx
 thefuzz
 python-Levenshtein
 alembic
+psycopg2-binary
+gunicorn
+python-dotenv
+reportlab

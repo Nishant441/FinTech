@@ -4,7 +4,16 @@ import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import { Upload, Activity, TrendingUp, DollarSign, Trash2, Zap, FileText } from 'lucide-react';
-import { downloadPDF } from '../services/api';
+import { 
+    downloadPDF, 
+    getDashboardData, 
+    getRecurringTransactions, 
+    getUploadedFiles,
+    uploadFile,
+    clearAllData,
+    simulateData,
+    deleteFile
+} from '../services/api';
 
 /**
  * Constant Colors for Chart Categories
@@ -36,15 +45,11 @@ const Dashboard = () => {
      */
     const fetchData = async () => {
         try {
-            const [dashRes, recRes, filesRes] = await Promise.all([
-                fetch('http://localhost:8000/dashboard-data'),
-                fetch('http://localhost:8000/analytics/recurring'),
-                fetch('http://localhost:8000/uploaded-files')
+            const [dashResult, recResult, filesResult] = await Promise.all([
+                getDashboardData(),
+                getRecurringTransactions(),
+                getUploadedFiles()
             ]);
-            
-            const dashResult = await dashRes.json();
-            const recResult = await recRes.json();
-            const filesResult = await filesRes.json();
             
             setData(dashResult);
             setRecurring(recResult);
@@ -69,12 +74,8 @@ const Dashboard = () => {
         if (!selected) return;
 
         setLoading(true);
-        const formData = new FormData();
-        formData.append('file', selected);
-
         try {
-            const res = await fetch('http://localhost:8000/upload', { method: 'POST', body: formData });
-            if (!res.ok) throw new Error("Upload Failed");
+            await uploadFile(selected);
             await fetchData();
         } catch (error) {
             alert("Upload failed. Ensure the CSV has correct headers (date, description, amount).");
@@ -91,7 +92,7 @@ const Dashboard = () => {
         if (!window.confirm("Are you sure you want to permanently delete all data and files?")) return;
         setLoading(true);
         try {
-            await fetch('http://localhost:8000/clear', { method: 'POST' });
+            await clearAllData();
             await fetchData();
         } catch (error) {
             alert("Cleanup failed.");
@@ -106,7 +107,7 @@ const Dashboard = () => {
     const handleSimulate = async () => {
         setLoading(true);
         try {
-            await fetch('http://localhost:8000/simulate', { method: 'POST' });
+            await simulateData();
             await fetchData();
         } catch (error) {
             alert("Data simulation failed.");
@@ -122,7 +123,7 @@ const Dashboard = () => {
         if (!window.confirm("Delete this file and all its associated transactions?")) return;
         setLoading(true);
         try {
-            await fetch(`http://localhost:8000/uploaded-files/${fileId}`, { method: 'DELETE' });
+            await deleteFile(fileId);
             await fetchData();
         } catch (error) {
             alert("File deletion failed.");
