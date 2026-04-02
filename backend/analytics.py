@@ -1,13 +1,17 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime
-from io import BytesIO
+import io
+from thefuzz import fuzz
 
 def process_csv(file_content: bytes) -> pd.DataFrame:
-
+    """
+    Parses raw CSV bytes into a clean Pandas DataFrame.
+    
+    Validates required columns (date, description, category, amount) 
+    and ensures correct data types.
+    """
     try:
-        df = pd.read_csv(BytesIO(file_content))
-        df = pd.read_csv(BytesIO(file_content))
+        df = pd.read_csv(io.BytesIO(file_content))
         df.columns = [c.lower().strip() for c in df.columns]
         
         required_cols = {'date', 'description', 'category', 'amount'}
@@ -22,11 +26,15 @@ def process_csv(file_content: bytes) -> pd.DataFrame:
         raise ValueError(f"Error processing CSV: {str(e)}")
 
 def calculate_category_spending(df: pd.DataFrame) -> dict:
-
+    """Groups spending by category and returns a dictionary of totals."""
     spending = df.groupby('category')['amount'].sum().to_dict()
     return spending
 
 def calculate_monthly_growth(df: pd.DataFrame) -> float:
+    """
+    Calculates the percentage growth in spending between the last two months.
+    Returns 0.0 if fewer than 2 months of data exist.
+    """
     if df.empty:
         return 0.0
     
@@ -41,18 +49,23 @@ def calculate_monthly_growth(df: pd.DataFrame) -> float:
     last_month = monthly.iloc[-1]
     prev_month = monthly.iloc[-2]
     
-    if prev_month <= 0: # Handle 0 or negative (though negative is unlikely for spend)
+    if prev_month <= 0:
         return 0.0
         
     return ((last_month - prev_month) / prev_month) * 100
 
 def predict_spending(df: pd.DataFrame) -> list:
+    """
+    Uses linear regression to predict next month's spending.
+    Returns a list of dictionaries with actual and predicted data points.
+    """
     if df.empty:
         return []
 
     df = df.copy()
     df['month_period'] = df['date'].dt.to_period('M')
-    # Use sort_index to ensure chronological order before reset_index
+    
+    # Ensure chronological order and reset index for regression math
     monthly_data = df.groupby('month_period')['amount'].sum().sort_index().reset_index()
     monthly_data['month_idx'] = np.arange(len(monthly_data))
 
@@ -73,12 +86,13 @@ def predict_spending(df: pd.DataFrame) -> list:
     A = np.vstack([x, np.ones(len(x))]).T
     m, c = np.linalg.lstsq(A, y, rcond=None)[0]
 
-    # Predict next month
+    # Predict next month index
     next_idx = len(monthly_data)
     next_val = m * next_idx + c
     next_month_str = str(monthly_data['month_period'].iloc[-1] + 1)
 
     result = []
+    # Add actual data points
     for _, row in monthly_data.iterrows():
         result.append({
             "month": str(row['month_period']),
@@ -86,6 +100,7 @@ def predict_spending(df: pd.DataFrame) -> list:
             "type": "actual"
         })
 
+    # Add predicted data point
     result.append({
         "month": next_month_str,
         "amount": max(0, float(next_val)),
@@ -94,19 +109,16 @@ def predict_spending(df: pd.DataFrame) -> list:
 
     return result
 
-from thefuzz import fuzz
-
 def find_recurring_patterns(df: pd.DataFrame):
     """
     Detects recurring transactions (e.g., Netflix, Rent) based on:
     1. Description similarity (fuzzy matching > 65)
     2. Consistent amounts (within ±$15)
-    3. Occurs in at least 4 distinct months
+    3. Occurrences spread across at least 4 distinct months
     """
     if df.empty:
         return []
 
-    # Sort by date for interval checking
     df = df.copy()
     df['date'] = pd.to_datetime(df['date'])
     df['month'] = df['date'].dt.to_period('M')
@@ -118,7 +130,7 @@ def find_recurring_patterns(df: pd.DataFrame):
     groups = []
     processed = set()
     
-    # 1. Fuzzy match descriptions (score > 65)
+    # Phase 1: Group descriptions using fuzzy matching
     for i, desc1 in enumerate(descriptions):
         if desc1 in processed:
             continue
@@ -132,19 +144,19 @@ def find_recurring_patterns(df: pd.DataFrame):
                     processed.add(desc2)
         groups.append(current_group)
         
+    # Phase 2: Validate grouped transactions for recurrence
     for group_descs in groups:
         group_df = df[df['description'].isin(group_descs)]
         
         if len(group_df) < 4:
             continue
             
-        # 2. Check if amounts are consistent (median ± $15)
+        # Amount consistency check (using median and ±$15 tolerance)
         amounts = group_df['amount'].values
         median_amount = np.median(amounts)
-        
         consistent_subset = group_df[np.abs(group_df['amount'] - median_amount) <= 15]
         
-        # Verify it appears in at least 4 distinct months
+        # Verify long-term pattern (must span at least 4 different months)
         distinct_months = consistent_subset['month'].nunique()
         
         if distinct_months >= 4:

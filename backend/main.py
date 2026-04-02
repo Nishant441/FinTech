@@ -13,6 +13,7 @@ import pandas as pd
 import numpy as np
 from datetime import date
 
+# Initialize database tables
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="FinSight Engine")
@@ -27,16 +28,22 @@ app.add_middleware(
 
 REQUIRED_COLS = {"date", "description", "category", "amount"}
 
-
 def generate_personal_spending_df(months: int = 6, seed: int = 42) -> pd.DataFrame:
+    """
+    Generates a synthetic DataFrame of personal spending.
+    Includes fixed costs (Rent) and randomized variable costs (Dining, Shopping, etc.)
+    with a monthly recurring structure.
+    """
     rng = np.random.default_rng(seed)
     end_month_start = pd.Timestamp(date.today()).replace(day=1)
     month_starts = pd.date_range(end=end_month_start, periods=months, freq="MS")
 
     rows = []
     for m in month_starts:
-        rows.append({"date": m + pd.Timedelta(days=0), "description": "Rent payment", "category": "Rent", "amount": 1800.00})
+        # Fixed Rent
+        rows.append({"date": m, "description": "Rent payment", "category": "Rent", "amount": 1800.00})
 
+        # Utilities (Dynamic)
         for d in [5, 18]:
             rows.append({
                 "date": m + pd.Timedelta(days=d),
@@ -45,6 +52,7 @@ def generate_personal_spending_df(months: int = 6, seed: int = 42) -> pd.DataFra
                 "amount": float(np.clip(rng.normal(160, 25), 80, 260)),
             })
 
+        # Monthly Subscriptions
         subs = [
             (3, "Streaming subscription", 15.99),
             (10, "Music subscription", 10.99),
@@ -53,6 +61,7 @@ def generate_personal_spending_df(months: int = 6, seed: int = 42) -> pd.DataFra
         for d, name, amt in subs:
             rows.append({"date": m + pd.Timedelta(days=d), "description": name, "category": "Subscriptions", "amount": float(amt)})
 
+        # Randomized Variable Costs
         for _ in range(int(rng.integers(6, 10))):
             d = int(rng.integers(2, 28))
             rows.append({
@@ -71,48 +80,12 @@ def generate_personal_spending_df(months: int = 6, seed: int = 42) -> pd.DataFra
                 "amount": float(np.clip(rng.normal(38, 18), 8, 120)),
             })
 
-        for _ in range(int(rng.integers(8, 15))):
-            d = int(rng.integers(2, 28))
-            rows.append({
-                "date": m + pd.Timedelta(days=d),
-                "description": "Transit / gas",
-                "category": "Transport",
-                "amount": float(np.clip(rng.normal(18, 9), 3, 60)),
-            })
-
-        for _ in range(int(rng.integers(1, 5))):
-            d = int(rng.integers(2, 28))
-            rows.append({
-                "date": m + pd.Timedelta(days=d),
-                "description": "Shopping",
-                "category": "Shopping",
-                "amount": float(np.clip(rng.normal(75, 40), 15, 260)),
-            })
-
-        for _ in range(int(rng.integers(0, 3))):
-            d = int(rng.integers(2, 28))
-            rows.append({
-                "date": m + pd.Timedelta(days=d),
-                "description": "Pharmacy / health",
-                "category": "Health",
-                "amount": float(np.clip(rng.normal(35, 25), 8, 160)),
-            })
-
-        for _ in range(int(rng.integers(1, 4))):
-            d = int(rng.integers(2, 28))
-            rows.append({
-                "date": m + pd.Timedelta(days=d),
-                "description": "Entertainment",
-                "category": "Entertainment",
-                "amount": float(np.clip(rng.normal(45, 20), 10, 140)),
-            })
-
     df = pd.DataFrame(rows)
     return df[["date", "description", "category", "amount"]]
 
-
 @app.post("/upload")
 async def upload_csv(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Handles CSV file uploads, processes transactions, and records file metadata."""
     if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload a CSV.")
 
@@ -130,7 +103,7 @@ async def upload_csv(file: UploadFile = File(...), db: Session = Depends(get_db)
     # Create UploadedFile record
     new_file = models.UploadedFile(filename=file.filename)
     db.add(new_file)
-    db.flush() # Get the ID before committing
+    db.flush()
 
     inserted = 0
     for _, row in df.iterrows():
@@ -139,6 +112,7 @@ async def upload_csv(file: UploadFile = File(...), db: Session = Depends(get_db)
         cat = str(row["category"])
         amt = float(row["amount"])
 
+        # Prevent duplicate entries for the exact same transaction
         exists = db.query(models.Transaction).filter(
             models.Transaction.date == tx_date,
             models.Transaction.description == desc,
@@ -161,9 +135,9 @@ async def upload_csv(file: UploadFile = File(...), db: Session = Depends(get_db)
     db.commit()
     return {"message": f"Uploaded. Added {inserted} new transactions."}
 
-
 @app.get("/dashboard-data")
 def get_dashboard_data(db: Session = Depends(get_db)):
+    """Retrieves all data required for the main dashboard metrics and charts."""
     query = db.query(models.Transaction)
     df = pd.read_sql(query.statement, engine)
 
@@ -200,24 +174,23 @@ def get_dashboard_data(db: Session = Depends(get_db)):
         "months_count": months_count,
     }
 
-
 @app.post("/clear")
 def clear_all_data(db: Session = Depends(get_db)):
+    """Wipes all transactions and file metadata from the system."""
     db.query(models.Transaction).delete()
     db.query(models.UploadedFile).delete()
     db.commit()
     return {"message": "All data cleared."}
 
-
 @app.post("/simulate")
 def simulate_data(db: Session = Depends(get_db)):
+    """Clears existing data and populates the database with 6 months of simulated history."""
     df = generate_personal_spending_df(months=6, seed=42)
 
     db.query(models.Transaction).delete()
     db.query(models.UploadedFile).delete()
     db.commit()
 
-    # Create a dummy file record for simulated data
     sim_file = models.UploadedFile(filename="simulated_data.csv")
     db.add(sim_file)
     db.flush()
@@ -235,17 +208,17 @@ def simulate_data(db: Session = Depends(get_db)):
     db.add_all(transactions)
     db.commit()
     return {"message": f"Simulated {len(transactions)} transactions."}
+
 @app.get("/export-pdf")
 def export_pdf(db: Session = Depends(get_db)):
-    transactions = db.query(models.Transaction).all()
-    transactions = db.query(models.Transaction).all()
+    """Generates a PDF report containing total spending and a summary of recent transactions."""
+    transactions = db.query(models.Transaction).order_by(models.Transaction.date.desc()).all()
     
-
     buffer = io.BytesIO()
     p = canvas.Canvas(buffer, pagesize=letter)
     width, height = letter
 
-
+    # Header section
     p.setFont("Helvetica-Bold", 24)
     p.setStrokeColor(colors.indigo)
     p.drawString(100, height - 50, "FinSight Engine: Financial Report")
@@ -254,14 +227,14 @@ def export_pdf(db: Session = Depends(get_db)):
     p.drawString(100, height - 70, f"Generated on: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}")
     p.line(100, height - 75, 500, height - 75)
 
-
+    # General Spending Summary
     total = sum(t.amount for t in transactions)
     p.setFont("Helvetica-Bold", 14)
     p.drawString(100, height - 110, f"Total Spending: ${total:,.2f}")
 
-
+    # Transaction List Table
     p.setFont("Helvetica-Bold", 12)
-    p.drawString(100, height - 150, "Recent Transactions")
+    p.drawString(100, height - 150, "Recent Transactions (Top 20)")
     
     y = height - 170
     p.setFont("Helvetica", 10)
@@ -287,25 +260,23 @@ def export_pdf(db: Session = Depends(get_db)):
         "Content-Disposition": "attachment; filename=FinSight_Report.pdf"
     })
 
-
 @app.get("/analytics/recurring")
 def get_recurring_transactions(db: Session = Depends(get_db)):
+    """Analyzes history to identify and tag recurring monthly subscriptions."""
     query = db.query(models.Transaction)
     df = pd.read_sql(query.statement, engine)
 
     if df.empty:
         return []
 
-    # Detect patterns
     recurring_patterns = analytics.find_recurring_patterns(df)
 
-    # Tag transactions in DB
+    # Automatically tag detected transactions as recurring in the database
     all_recurring_ids = []
     for pattern in recurring_patterns:
         all_recurring_ids.extend(pattern.get("transaction_ids", []))
 
     if all_recurring_ids:
-        # Reset all first (or just update the ones found)
         db.query(models.Transaction).update({models.Transaction.is_recurring: 0})
         db.query(models.Transaction).filter(models.Transaction.id.in_(all_recurring_ids)).update(
             {models.Transaction.is_recurring: 1}, synchronize_session=False
@@ -314,25 +285,23 @@ def get_recurring_transactions(db: Session = Depends(get_db)):
 
     return recurring_patterns
 
-
 @app.get("/transactions")
 def get_transactions(db: Session = Depends(get_db)):
-    transactions = db.query(models.Transaction).order_by(models.Transaction.date.desc()).all()
-    return transactions
-
+    """Returns a list of all transactions sorted by date."""
+    return db.query(models.Transaction).order_by(models.Transaction.date.desc()).all()
 
 @app.get("/uploaded-files")
 def get_uploaded_files(db: Session = Depends(get_db)):
-    files = db.query(models.UploadedFile).order_by(models.UploadedFile.upload_date.desc()).all()
-    return files
-
+    """Returns a list of all successful CSV metadata records."""
+    return db.query(models.UploadedFile).order_by(models.UploadedFile.upload_date.desc()).all()
 
 @app.delete("/uploaded-files/{file_id}")
 def delete_uploaded_file(file_id: int, db: Session = Depends(get_db)):
+    """Deletes a specific file and automatically cascades removal of all its transactions."""
     file_record = db.query(models.UploadedFile).filter(models.UploadedFile.id == file_id).first()
     if not file_record:
         raise HTTPException(status_code=404, detail="File not found")
     
-    db.delete(file_record) # This will cascade delete linked transactions
+    db.delete(file_record)
     db.commit()
     return {"message": "File and associated transactions deleted."}
