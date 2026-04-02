@@ -1,90 +1,96 @@
-# FinSight Engine
-![FinSight](https://github.com/user-attachments/assets/ae3cce80-f191-4fde-bb1a-118cd6316ba2)
+# ⚡ FinSight Engine
 
-FinSight Engine is a financial analytics dashboard that visualizes spending data, calculates growth trends, and forecasts future expenses. It consists of a FastAPI backend and a React frontend.
+[![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
 
-## Prerequisites
+**FinSight Engine** is a high-performance financial analytics dashboard designed to transform raw transaction data into actionable insights. Built with a modern, decoupled architecture, it leverages **FastAPI** for a robust backend and **React + Vite** for a cinematic, responsive user experience.
 
-- Python 3.9+
-- Node.js 16+
-- npm or yarn
+---
 
-## Installation & Setup
+## 🚀 Key Features
+
+- **📊 Intelligent Analytics**: Real-time spending breakdown by category and month-over-month growth metrics.
+- **🔄 Recurring Transaction Detection**: Advanced heuristic algorithms to identify and tag monthly subscriptions and recurring patterns.
+- **📈 AI-Powered Forecasting**: Predictive spending models powered by NumPy and Pandas to forecast next-month expenditures.
+- **📄 Automated PDF Reporting**: Generate high-fidelity, professional financial reports instantly using **ReportLab**.
+- **📁 CSV Ingestion**: Seamlessly upload and process bank transaction data with built-in schema validation and deduplication.
+- **☁️ Production Ready**: Optimized for modern cloud platforms (Vercel, Render, Neon) with full PostgreSQL support.
+
+---
+
+## 🛠️ Tech Stack
+
+### **Backend**
+- **Framework**: FastAPI (High-performance Python API)
+- **Database**: PostgreSQL (Production) / SQLite (Local)
+- **ORM**: SQLAlchemy
+- **Data Science**: Pandas, NumPy
+- **Migrations**: Alembic
+- **Reports**: ReportLab
+
+### **Frontend**
+- **Library**: React 18
+- **Build Tool**: Vite
+- **Styling**: Tailwind CSS / CSS Modules
+- **Charts**: Recharts (Customized cinematic charts)
+- **Icons**: Lucide React
+
+---
+
+## ⚙️ Installation & Setup
 
 ### 1. Backend Setup
-
-The backend is built with FastAPI and uses SQLite for data storage.
-
-1.  **Navigate to the project root:**
-    ```bash
-    cd FinTech
-    ```
-
-2.  **Create a virtual environment:**
-    ```bash
-    python3 -m venv venv
-    ```
-
-3.  **Activate the virtual environment:**
-    - On macOS/Linux:
-      ```bash
-      source venv/bin/activate
-      ```
-    - On Windows:
-      ```bash
-      venv\Scripts\activate
-      ```
-
-4.  **Install dependencies:**
-    ```bash
-    pip install -r backend/requirements.txt
-    ```
-    *(Note: If `requirements.txt` is missing, install the main packages manually: `pip install fastapi uvicorn sqlalchemy pandas numpy reportlab multipart`)*
-
-5.  **Run the Backend Server:**
-    ```bash
-    cd backend
-    uvicorn main:app --reload
-    ```
-    The API will be available at `http://127.0.0.1:8000`.
-    API Documentation (Swagger UI) is available at `http://127.0.0.1:8000/docs`.
+1. **Prepare Environment**:
+   ```bash
+   cd backend && python3 -m venv venv
+   source venv/bin/activate  # macOS/Linux
+   pip install -r requirements.txt
+   ```
+2. **Run Server**:
+   ```bash
+   uvicorn main:app --reload
+   ```
 
 ### 2. Frontend Setup
+1. **Install Dependencies**:
+   ```bash
+   cd frontend && npm install
+   ```
+2. **Launch Dev Server**:
+   ```bash
+   npm run dev
+   ```
 
-The frontend is built with React, Vite, and Tailwind CSS.
+---
 
-1.  **Open a new terminal and navigate to the frontend directory:**
-    ```bash
-    cd FinTech/frontend
-    ```
+## 📡 API Endpoints
 
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/dashboard-data` | `GET` | Retrieves metrics, category breaks, and trends. |
+| `/analytics/recurring` | `GET` | Analyzes history for monthly subscription patterns. |
+| `/upload` | `POST` | Processes CSV transaction files. |
+| `/export-pdf` | `GET` | Generates a downloadable financial report. |
 
-3.  **Run the Frontend Development Server:**
-    ```bash
-    npm run dev
-    ```
-    The application will be available at `http://localhost:5173`.
+---
 
-## Features
-- **Dashboard**: View total spending, month-over-month growth, and AI-powered spending forecasts.
-- **Visualizations**: Interactive pie charts for category spending and line charts for trends using **Recharts**.
-- **Data Management**:
-    - **Upload CSV**: Ingest bank transaction CSV files via a **FastAPI** endpoint.
-    - **Simulate Data**: Generate realistic sample financial data using **NumPy** and **Pandas**.
-    - **Clear Data**: Reset the **SQLite** database.
-- **Forecasting**: **Linear Regression** model (implemented in Python) to predict next month's spending based on historical trends.
-- **Reporting**: Generate and download a PDF financial report using **ReportLab**.
+## 📊 Database Schema
+The engine uses a relational schema with a focus on auditability:
+- **`uploaded_files`**: Tracks metadata for every CSV ingested.
+- **`transactions`**: Stores atomic spending records mapped to files.
+- **`is_recurring`**: Dynamic tagging for subscription detection.
 
-## Tech Stack
-- **Backend:** Python, FastAPI, SQLAlchemy, Pandas, NumPy, ReportLab
-- **Frontend:** React, Vite, Tailwind CSS, Recharts, Lucide React
-- **Database:** SQLite
+---
 
-## CSV Format
+## 🌐 Deployment
+This project is configured for **Decoupled Deployment**:
+- **Frontend**: Hosted on [Vercel](https://vercel.com) (Edge-optimized).
+- **Backend**: Hosted on [Render](https://render.com) (Containerized).
+- **Database**: Managed by [Neon.tech](https://neon.tech) (Serverless PostgreSQL).
 
-If uploading a CSV, ensure it has the following headers:
-`date`, `description`, `category`, `amount`
+---
+
+*Built with passion by [Nishant441](https://github.com/Nishant441)*
